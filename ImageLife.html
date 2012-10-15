@@ -1,0 +1,202 @@
+<html>
+	<head>
+		<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+		<script type = "text/javascript">
+		$(document).ready(function() {
+			canvas = $('#imageHolder')[0];
+			redChannel = $('#redChannel')[0];
+			greenChannel = $('#greenChannel')[0];
+			blueChannel = $('#blueChannel')[0];
+			mixedChannel = $('#mixedChannel')[0];
+			height = canvas.height = redChannel.height = greenChannel.height = blueChannel.height = mixedChannel.height = 250;
+			canvas.style.height = 500;
+			width = canvas.width = redChannel.width = greenChannel.width = blueChannel.width = mixedChannel.width = 250;
+			canvas.style.width = 500;
+			context = canvas.getContext('2d');
+			rc = redChannel.getContext('2d');
+			gc = greenChannel.getContext('2d');
+			bc = blueChannel.getContext('2d');
+			mc = mixedChannel.getContext('2d');
+			$('input[type="file"]').change(function() {
+				if(this.files && this.files[0]) {
+					var reader = new FileReader();
+					reader.onload = function(e) {
+						userImage = new Image();
+						userImage.src = e.target.result;
+						userImage.onload = function() {
+							context.drawImage(userImage, 0, 0, userImage.width, userImage.height, 1, 1, width - 2, height - 2);
+							imageData = context.getImageData(0, 0, width, height).data;
+							init();
+						}
+					}
+					reader.readAsDataURL(this.files[0]);
+				}
+			});
+		});
+		function getBitmap() {
+			avgR = avgG = avgB = 0;
+			bitmap = [];
+			var i = 0;
+			for(var y = 0; y < canvas.height; y++) {
+				row = [];
+				for(var x = 0; x < canvas.width; x++) {
+					rgb = [];
+					for(var j = 0; j < 3; j++) {
+						rgb.push(imageData[i + j]);
+					}
+					avgR += imageData[i + 0];
+					avgG += imageData[i + 1];
+					avgB += imageData[i + 2];
+					row.push(rgb);
+					i += 4;
+				}
+				bitmap.push(row);
+			}
+			avgR = avgR/(i/4);
+			avgG = avgG/(i/4);
+			avgB = avgB/(i/4);
+			return bitmap;
+		}
+		function init() {
+			bitmap = getBitmap();
+			showChannels(bitmap);
+			next = [];
+			grid = [];
+			for(var y = 0; y < bitmap.length; y++) {
+				next[y] = [];
+				grid[y] = []
+				for(var x = 0; x < bitmap[y].length; x++) {
+					next[y][x] = [];
+					grid[y][x] = []
+					for(var c = 0; c < bitmap[y][x].length; c++) {
+						next[y][x][c] = 0;
+					}
+					grid[y][x][0] = bitmap[y][x][0] > avgR ? 1 : 0;
+					grid[y][x][1] = bitmap[y][x][1] > avgR ? 1 : 0;
+					grid[y][x][2] = bitmap[y][x][2] > avgR ? 1 : 0;
+				}
+			}	
+		}
+		function showChannels(bitmap) {
+			rc.clearRect(0, 0, width, height);
+			rc.fillStyle = '#f00';
+			for(var y = 0; y < height; y++) for(var x = 0; x < width; x++) if(bitmap[y][x][0] > avgR) rc.fillRect(x, y, 1, 1);
+			gc.clearRect(0, 0, width, height);
+			gc.fillStyle = '#0f0';
+			for(var y = 0; y < height; y++) for(var x = 0; x < width; x++) if(bitmap[y][x][1] > avgG) gc.fillRect(x, y, 1, 1);
+			bc.clearRect(0, 0, width, height);
+			bc.fillStyle = '#00f';
+			for(var y = 0; y < height; y++) for(var x = 0; x < width; x++) if(bitmap[y][x][2] > avgB) bc.fillRect(x, y, 1, 1);
+			mc.clearRect(0, 0, width, height);
+			for(var y = 0; y < height; y++) {
+				for(var x = 0; x < width; x++) {
+					fill = '#';
+					fill += bitmap[y][x][0] > avgR ? 'F' : '0';
+					fill += bitmap[y][x][1] > avgG ? 'F' : '0';
+					fill += bitmap[y][x][2] > avgB ? 'F' : '0';
+					mc.fillStyle = fill;
+					mc.fillRect(x, y, 1, 1);
+				}
+			}
+		}
+		function playLife() {
+			setInterval(gridNext, 0);
+		}
+		rules = [0, 0, 0.5, 1, 0, 0, 0, 0, 0];
+		function cellNext(x, y) {
+			for(var c = 0; c < grid[y][x].length; c++) {
+				sum = grid[y - 1][x - 1][c] + grid[y][x - 1][c] + grid[y + 1][x - 1][c] + grid[y - 1][x ][c] + grid[y + 1][x ][c] + grid[y - 1][x + 1][c] + grid[y][x + 1][c] + grid[y + 1][x + 1][c];
+				if		(rules[sum] == 0.5)	next[y][x][c] = grid[y][x][c];
+				else if	(rules[sum] == 1.0)	next[y][x][c] = 1;
+				else if	(rules[sum] == 0.0)	next[y][x][c] = 0;
+				else console.log(sum, "error...");
+			}
+			return;
+		}
+		function gridNext() {
+			for(var y = 1; y < bitmap.length - 1; y++) for(var x = 1; x < bitmap[y].length - 1; x++) cellNext(x, y);
+			for(var y = 1; y < bitmap.length - 1; y++) for(var x = 1; x < bitmap[y].length - 1; x++) for(var c = 0; c < bitmap[y][x].length; c++) grid[y][x][c] = next[y][x][c];
+			drawGrids();
+		}
+		function drawGrids() {
+			rc.clearRect(0, 0, width, height);
+			rc.fillStyle = '#f00';
+			for(var y = 0; y < height; y++) for(var x = 0; x < width; x++) if(grid[y][x][0] == 1) rc.fillRect(x, y, 1, 1);
+			gc.clearRect(0, 0, width, height);
+			gc.fillStyle = '#0f0';
+			for(var y = 0; y < height; y++) for(var x = 0; x < width; x++) if(grid[y][x][1] == 1) gc.fillRect(x, y, 1, 1);
+			bc.clearRect(0, 0, width, height);
+			bc.fillStyle = '#00f';
+			for(var y = 0; y < height; y++) for(var x = 0; x < width; x++) if(grid[y][x][2] == 1) bc.fillRect(x, y, 1, 1);
+			mc.clearRect(0, 0, width, height);
+			for(var y = 0; y < height; y++) {
+				for(var x = 0; x < width; x++) {
+					fill = '#';
+					for(var c = 0; c < 3; c++) {
+						fill += grid[y][x][c] == 1 ? 'F': '0';
+					}
+					mc.fillStyle = fill;
+					mc.fillRect(x, y, 1, 1);
+				}
+			}
+		}
+		</script>
+		<style type = "text/css">
+			.container {
+				width: 1000px;
+				height: 500px;
+			}
+			canvas#imageHolder {
+				position: absolute;
+				left: 0px;
+				top: 0px;
+			}
+			canvas#redChannel {
+				background-color: #000;
+				height: 250px;
+				width: 250px;
+				position: absolute;
+				left: 501px;
+				top: 0px;
+			}
+			canvas#greenChannel {
+				background-color: #000;
+				height: 250px;
+				width: 250px;
+				position: absolute;
+				left: 752px;
+				top: 0px;
+			}
+			canvas#blueChannel {
+				background-color: #000;
+				height: 250px;
+				width: 250px;
+				position: absolute;
+				left: 501px;
+				top: 251px;
+			}
+			canvas#mixedChannel {
+				background-color: #000;
+				height: 250px;
+				width: 250px;
+				position: absolute;
+				left: 752px;
+				top: 251px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class = "container">
+			<canvas id = "imageHolder">Sorry, it appears your browser doesn't support Canvas. Consider upgrading.</canvas>
+			<canvas id = "redChannel" class = "colorChannel">Sorry, it appears your browser doesn't support Canvas. Consider upgrading.</canvas>
+			<canvas id = "greenChannel" class = "colorChannel">Sorry, it appears your browser doesn't support Canvas. Consider upgrading.</canvas>
+			<canvas id = "blueChannel" class = "colorChannel">Sorry, it appears your browser doesn't support Canvas. Consider upgrading.</canvas>
+			<canvas id = "mixedChannel" class = "colorChannel">Sorry, it appears your browser doesn't support Canvas. Consider upgrading.</canvas>
+		</div>
+		<form id="form_img">
+			<input type='file' />
+			<img id="img_id" src="#" alt="your image" style = "display: none;"/>
+			<input type = "button" onclick = "playLife()" id = "playlife" value = "Play Life" />
+		</form>
+	</body>
+</html>
